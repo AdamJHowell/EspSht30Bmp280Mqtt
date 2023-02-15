@@ -44,8 +44,8 @@ unsigned long lastLedBlinkTime = 0;								 // The time of the last telemetry pr
 const unsigned int ONBOARD_LED = 2;								 // The GPIO which the onboard LED is connected to.
 const unsigned int JSON_DOC_SIZE = 512;						 // The ArduinoJson document size.
 const unsigned int MILLIS_IN_SEC = 1000;						 // The number of milliseconds in one second.
-const char *COMMAND_TOPIC = "AdamsEspArmada/commands";	 // The topic used to subscribe to update commands.  Commands: publishTelemetry, changeTelemetryInterval, publishStatus.
-const char *TOPIC_PREFIX = "AdamsEspArmada/";				 // The MQTT topic prefix, which will have suffixes appended to.
+const char *COMMAND_TOPIC = "OutdoorESP8266/commands";	 // The topic used to subscribe to update commands.  Commands: publishTelemetry, changeTelemetryInterval, changeSeaLevelPressure.
+const char *TOPIC_PREFIX = "OutdoorESP8266/";				 // The MQTT topic prefix, which will have suffixes appended to.
 const char *SHT_TEMP_C_TOPIC = "sht30/tempC";				 // The MQTT Celsius temperature topic suffix.
 const char *SHT_TEMP_F_TOPIC = "sht30/tempF";				 // The MQTT Fahrenheit temperature topic suffix.
 const char *SHT_HUMIDITY_TOPIC = "sht30/humidity";			 // The MQTT humidity topic suffix.
@@ -57,9 +57,9 @@ const char *MAC_TOPIC = "mac";									 // The MAC address topic suffix.
 const char *IP_TOPIC = "ip";										 // The IP address topic suffix.
 const char *WIFI_COUNT_TOPIC = "wifiCount";					 // The Wi-Fi count topic suffix.
 const char *WIFI_COOLDOWN_TOPIC = "wifiCoolDownInterval"; // The Wi-Fi count topic suffix.
-const char *MQTT_COUNT_TOPIC = "mqttCount";						 // The MQTT count topic suffix.
-const char *MQTT_COOLDOWN_TOPIC = "mqttCoolDownInterval";	 // The MQTT count topic suffix.
-const char *PUBLISH_COUNT_TOPIC = "publishCount";				 // The publishCount topic suffix.
+const char *MQTT_COUNT_TOPIC = "mqttCount";					 // The MQTT count topic suffix.
+const char *MQTT_COOLDOWN_TOPIC = "mqttCoolDownInterval"; // The MQTT count topic suffix.
+const char *PUBLISH_COUNT_TOPIC = "publishCount";			 // The publishCount topic suffix.
 const char *MQTT_TOPIC = "espWeather";							 // The topic used to publish a single JSON message containing all data.
 float seaLevelPressure = 1026.1;									 // The local sea-level pressure. Provo Airport: https://forecast.weather.gov/data/obhistory/KPVU.html
 float sht30TempCArray[] = { 21.12, 21.12, 21.12 };			 // An array to hold the 3 most recent Celsius values.
@@ -67,7 +67,6 @@ float sht30HumidityArray[] = { 21.12, 21.12, 21.12 };		 // An array to hold the 
 float bmpTempCArray[] = { -21.12, 21.12, 42.42 };			 // An array to hold the 3 most recent Celsius values, initialized to reasonable levels.
 float bmpPressureHPaArray[] = { 8.7, 882.64, 1083.8 };	 // An array to hold the 3 most recent barometric pressure values, initialized to reasonable levels.
 float bmpAltitudeMArray[] = { -413.0, 1337.0, 3108.0 };	 // An array to hold the 3 most recent barometric pressure values, initialized to reasonable levels.
-
 //const char *wifiSsid = "nunya";											// Wi-Fi SSID.  Defined in privateInfo.h
 //const char *wifiPassword = "nunya";										// Wi-Fi password.  Defined in privateInfo.h
 //const char *mqttBroker = "nunya";											// The broker address.  Defined in privateInfo.h
@@ -656,8 +655,13 @@ void mqttCallback( char *topic, byte *payload, unsigned int length )
 		Serial.printf( "MQTT publish interval has been updated to %u\n", publishInterval );
 		lastPublishTime = 0;
 	}
-	else if( strcmp( command, "publishStatus" ) == 0 )
-		Serial.println( "publishStatus is not yet implemented." );
+	else if( strcmp( command, "changeSeaLevelPressure" ) == 0 )
+	{
+		unsigned long tempValue = callbackJsonDoc["value"];
+		if( tempValue > 800 && tempValue < 1200 )
+			seaLevelPressure = tempValue;
+		Serial.printf( "seaLevelPressure has been changed to %f.\n", seaLevelPressure );
+	}
 	else
 		Serial.printf( "Unknown command '%s'\n", command );
 } // End of the mqttCallback() function.
