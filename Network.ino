@@ -35,6 +35,7 @@ void lookupWifiCode( int code, char *buffer )
 
 /**
  * @brief lookupMQTTCode() will return the string for an integer state code.
+ * The string values are taken from PubSubClient.h
  */
 void lookupMQTTCode( int code, char *buffer )
 {
@@ -90,7 +91,7 @@ int checkForSSID( const char *ssidName )
       Serial.println( "No WiFi SSIDs are in range!" );
    else
    {
-      Serial.printf( "WiFi SSIDs in range: %d\n", networkCount );
+      //      Serial.printf( "WiFi SSIDs in range: %d\n", networkCount );
       for( int i = 0; i < networkCount; ++i )
       {
          // Check to see if this SSID matches the parameter.
@@ -102,56 +103,86 @@ int checkForSSID( const char *ssidName )
 } // End of checkForSSID() function.
 
 /**
- * @brief wifiConnect() will connect to a SSID.
+ * @brief wifiConnect() will attempt to connect to a single SSID.
  */
-void wifiConnect()
+bool wifiConnect( const char *ssid, const char *password )
+{
+   wifiConnectCount++;
+   // Turn the LED off to show Wi-Fi is not connected.
+   digitalWrite( ONBOARD_LED, LED_OFF );
+
+   Serial.printf( "Attempting to connect to Wi-Fi SSID '%s'", ssid );
+   WiFi.mode( WIFI_STA );
+   //   WiFi.setHostname( hostName );
+   WiFi.begin( ssid, password );
+
+   unsigned long wifiConnectionStartTime = millis();
+
+   // Loop until connected, or until wifiConnectionTimeout.
+   while( WiFi.status() != WL_CONNECTED && ( millis() - wifiConnectionStartTime < wifiConnectionTimeout ) )
+   {
+      Serial.print( "." );
+      delay( 1000 );
+   }
+   Serial.println( "" );
+
+   if( WiFi.status() == WL_CONNECTED )
+   {
+      // Print that Wi-Fi has connected.
+      Serial.println( "Wi-Fi connection established!" );
+      snprintf( ipAddress, 16, "%d.%d.%d.%d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3] );
+      // Turn the LED on to show that Wi-Fi is connected.
+      digitalWrite( ONBOARD_LED, LED_ON );
+      return true;
+   }
+   Serial.println( "Wi-Fi failed to connect in the timeout period.\n" );
+   return false;
+} // End of the wifiConnect() function.
+
+/**
+ * @brief wifiMultiConnect() will iterate through the SSIDs in 'wifiSsidList[]', and then use checkForSSID() determine which are in range.
+ * When a SSID is in range, wifiConnect() will be called with that SSID and password.
+ */
+void wifiMultiConnect()
 {
    long time = millis();
    if( lastWifiConnectTime == 0 || ( time > wifiCoolDownInterval && ( time - wifiCoolDownInterval ) > lastWifiConnectTime ) )
    {
-      int ssidCount = checkForSSID( wifiSsid );
-      if( ssidCount == 0 )
+      Serial.println( "\nEntering wifiMultiConnect()" );
+      digitalWrite( ONBOARD_LED, LED_OFF ); // Turn the LED off to show that Wi-Fi is not yet connected.
+      for( size_t networkArrayIndex = 0; networkArrayIndex < sizeof( wifiSsidList ); networkArrayIndex++ )
       {
-         Serial.printf( "SSID '%s' is not in range!\n", wifiSsid );
-         digitalWrite( ONBOARD_LED, LED_OFF ); // Turn the LED off to show that Wi-Fi has no chance of connecting.
-      }
-      else
-      {
-         wifiConnectCount++;
-         // Turn the LED off to show Wi-Fi is not connected.
-         digitalWrite( ONBOARD_LED, LED_OFF );
+         // Get the details for this connection attempt.
+         const char *wifiSsid = wifiSsidList[networkArrayIndex];
+         const char *wifiPassword = wifiPassArray[networkArrayIndex];
 
-         Serial.printf( "Attempting to connect to Wi-Fi SSID '%s'", wifiSsid );
-         WiFi.mode( WIFI_STA );
-         //			WiFi.config( INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE );
-         //			WiFi.setHostname( hostName );
-         WiFi.begin( wifiSsid, wifiPassword );
+         // Announce the Wi-Fi parameters for this connection attempt.
+         Serial.print( "Attempting to connect to to SSID \"" );
+         Serial.print( wifiSsid );
+         Serial.println( "\"" );
 
-         unsigned long wifiConnectionStartTime = millis();
-
-         // Loop until connected, or until wifiConnectionTimeout.
-         while( WiFi.status() != WL_CONNECTED && ( millis() - wifiConnectionStartTime < wifiConnectionTimeout ) )
+         // Don't even try to connect if the SSID cannot be found.
+         int ssidCount = checkForSSID( wifiSsid );
+         if( ssidCount > 0 )
          {
-            Serial.print( "." );
-            delay( 1000 );
-         }
-         Serial.println( "" );
+            // This is useful for detecting multiples APs.
+            if( ssidCount > 1 )
+               Serial.printf( "Found %d SSIDs matching '%s'.\n", ssidCount, wifiSsid );
 
-         if( WiFi.status() == WL_CONNECTED )
-         {
-            // Print that Wi-Fi has connected.
-            Serial.println( "\nWi-Fi connection established!" );
-            snprintf( ipAddress, 16, "%d.%d.%d.%d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3] );
-            // Turn the LED on to show that Wi-Fi is connected.
-            digitalWrite( ONBOARD_LED, LED_ON );
-            return;
+            // If the Wi-Fi connection is successful, set the mqttClient broker parameters.
+            if( wifiConnect( wifiSsid, wifiPassword ) )
+            {
+               mqttClient.setServer( mqttBrokerArray[networkArrayIndex], mqttPortArray[networkArrayIndex] );
+               return;
+            }
          }
          else
-            Serial.println( "Wi-Fi failed to connect in the timeout period.\n" );
+            Serial.printf( "Network '%s' was not found!\n\n", wifiSsid );
       }
+      Serial.println( "Exiting wifiMultiConnect()\n" );
       lastWifiConnectTime = millis();
    }
-} // End of the wifiConnect() function.
+} // End of wifiMultiConnect() function.
 
 /**
  * @brief configureOTA() will configure and initiate Over The Air (OTA) updates for this device.
@@ -247,103 +278,125 @@ void configureOTA()
 } // End of the configureOTA() function.
 
 /**
+ * @brief mqttConnect() will connect to the MQTT broker.
+ */
+void mqttConnect()
+{
+   long time = millis();
+   // Connect the first time.  Avoid subtraction overflow.  Connect after cool down.
+   if( lastMqttConnectionTime == 0 || ( time > mqttCoolDownInterval && ( time - mqttCoolDownInterval ) > lastMqttConnectionTime ) )
+   {
+      mqttConnectCount++;
+      digitalWrite( ONBOARD_LED, LED_OFF );
+      Serial.println( "Connecting to the MQTT broker." );
+
+      // setServer() call is now called in wifiMultiConnect().
+      //mqttClient.setServer( mqttBroker, mqttPort );
+      mqttClient.setCallback( mqttCallback );
+
+      // Connect to the broker, using the MAC address as the client ID.
+      if( mqttClient.connect( macAddress ) )
+      {
+         Serial.println( "Connected to the broker." );
+         mqttClient.subscribe( COMMAND_TOPIC );
+         digitalWrite( ONBOARD_LED, LED_ON );
+      }
+      else
+      {
+         int mqttStateCode = mqttClient.state();
+         char buffer[29];
+         lookupMQTTCode( mqttStateCode, buffer );
+         Serial.printf( "MQTT state: %s\n", buffer );
+         Serial.printf( "MQTT state code: %d\n", mqttStateCode );
+
+         // This block increments the broker connection "cooldown" time by 10 seconds after every failed connection, and resets it once it is over 2 minutes.
+         if( mqttCoolDownInterval > 120000 )
+            mqttCoolDownInterval = 0;
+         mqttCoolDownInterval += 10000;
+      }
+
+      lastMqttConnectionTime = millis();
+   }
+} // End of the mqttConnect() function.
+
+/**
  * @brief publishTelemetry() will process incoming messages on subscribed topics.
  */
 void publishTelemetry()
 {
-   // Create a JSON Document on the stack.
-   StaticJsonDocument<JSON_DOC_SIZE> publishTelemetryJsonDoc;
-   // Add data: __FILE__, macAddress, ipAddress, tempC, tempF, soilMoisture, rssi, publishCount, notes
-   publishTelemetryJsonDoc["sketch"] = __FILE__;
-   publishTelemetryJsonDoc["mac"] = macAddress;
-   publishTelemetryJsonDoc["ip"] = ipAddress;
-   publishTelemetryJsonDoc["tempC"] = averageArray( sht30TempCArray );
-   publishTelemetryJsonDoc["tempF"] = cToF( averageArray( sht30TempCArray ) );
-   publishTelemetryJsonDoc["rssi"] = rssi;
-   publishTelemetryJsonDoc["publishCount"] = publishCount;
-   publishTelemetryJsonDoc["invalidValueCount"] = invalidValueCount;
-   // Prepare a String to hold the JSON.
-   char mqttString[JSON_DOC_SIZE];
-   // Serialize the JSON into mqttString, with indentation and line breaks.
-   serializeJsonPretty( publishTelemetryJsonDoc, mqttString );
-   // Publish the JSON to the MQTT broker.
-   bool success = mqttClient.publish( MQTT_TOPIC, mqttString, false );
-   if( success )
-      Serial.printf( "Successfully published to '%s'\n", MQTT_TOPIC );
-
    publishCount++;
    char topicBuffer[256] = "";
    char valueBuffer[25] = "";
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", SHT_TEMP_C_TOPIC );
    snprintf( valueBuffer, 25, "%f", averageArray( sht30TempCArray ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Published '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", SHT_TEMP_F_TOPIC );
    snprintf( valueBuffer, 25, "%f", cToF( averageArray( sht30TempCArray ) ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", SHT_HUMIDITY_TOPIC );
    snprintf( valueBuffer, 25, "%f", averageArray( sht30HumidityArray ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", BMP_TEMP_C_TOPIC );
    snprintf( valueBuffer, 25, "%f", averageArray( bmpTempCArray ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", BMP_TEMP_F_TOPIC );
    snprintf( valueBuffer, 25, "%f", cToF( averageArray( bmpTempCArray ) ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", BMP_PRESSURE_TOPIC );
    snprintf( valueBuffer, 25, "%f", averageArray( bmpPressureHPaArray ) );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", RSSI_TOPIC );
    snprintf( valueBuffer, 25, "%ld", rssi );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", MAC_TOPIC );
    snprintf( valueBuffer, 25, "%s", macAddress );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", IP_TOPIC );
    snprintf( valueBuffer, 25, "%s", ipAddress );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", WIFI_COUNT_TOPIC );
    snprintf( valueBuffer, 25, "%u", wifiConnectCount );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", WIFI_COOLDOWN_TOPIC );
    snprintf( valueBuffer, 25, "%lu", wifiCoolDownInterval );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", MQTT_COUNT_TOPIC );
    snprintf( valueBuffer, 25, "%u", mqttConnectCount );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", MQTT_COOLDOWN_TOPIC );
    snprintf( valueBuffer, 25, "%lu", mqttCoolDownInterval );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 
    snprintf( topicBuffer, 256, "%s%s%s%s", TOPIC_PREFIX, macAddress, "/", PUBLISH_COUNT_TOPIC );
    snprintf( valueBuffer, 25, "%lu", publishCount );
-   Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
-   mqttClient.publish( topicBuffer, valueBuffer );
+   if( mqttClient.publish( topicBuffer, valueBuffer ) )
+      Serial.printf( "Publishing '%s' to '%s'\n", valueBuffer, topicBuffer );
 } // End of the publishTelemetry() function.
 
 /**
@@ -393,43 +446,3 @@ void mqttCallback( char *topic, byte *payload, unsigned int length )
    else
       Serial.printf( "Unknown command '%s'\n", command );
 } // End of the mqttCallback() function.
-
-/**
- * @brief mqttConnect() will connect to the MQTT broker.
- */
-void mqttConnect()
-{
-   long time = millis();
-   // Connect the first time.  Avoid subtraction overflow.  Connect after cool down.
-   if( lastMqttConnectionTime == 0 || ( time > mqttCoolDownInterval && ( time - mqttCoolDownInterval ) > lastMqttConnectionTime ) )
-   {
-      mqttConnectCount++;
-      digitalWrite( ONBOARD_LED, LED_OFF );
-      Serial.printf( "Connecting to broker at %s:%d...\n", mqttBroker, mqttPort );
-      mqttClient.setServer( mqttBroker, mqttPort );
-      mqttClient.setCallback( mqttCallback );
-
-      // Connect to the broker, using the MAC address for a MQTT client ID.
-      if( mqttClient.connect( macAddress ) )
-      {
-         Serial.println( "Connected to MQTT Broker." );
-         mqttClient.subscribe( COMMAND_TOPIC );
-         digitalWrite( ONBOARD_LED, LED_ON );
-      }
-      else
-      {
-         int mqttStateCode = mqttClient.state();
-         char buffer[29];
-         lookupMQTTCode( mqttStateCode, buffer );
-         Serial.printf( "MQTT state: %s\n", buffer );
-         Serial.printf( "MQTT state code: %d\n", mqttStateCode );
-
-         // This block increments the broker connection "cooldown" time by 10 seconds after every failed connection, and resets it once it is over 2 minutes.
-         if( mqttCoolDownInterval > 120000 )
-            mqttCoolDownInterval = 0;
-         mqttCoolDownInterval += 10000;
-      }
-
-      lastMqttConnectionTime = millis();
-   }
-} // End of the mqttConnect() function.

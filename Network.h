@@ -4,7 +4,7 @@
 
 #include "EspSht30Bmp280Mqtt.h"
 #include <ArduinoOTA.h>   // Arduino Over-The-Air updates.
-#include <PubSubClient.h> // MQTT client by Nick O'Leary: https://github.com/knolleary/pubsubclient
+#include "PubSubClient.h" // MQTT client by Nick O'Leary: https://github.com/knolleary/pubsubclient
 #include <WiFiUdp.h>      // Arduino Over-The-Air updates.
 
 
@@ -48,7 +48,8 @@ PubSubClient mqttClient( wifiClient );
 void lookupWifiCode( int code, char *buffer );
 void lookupMQTTCode( int code, char *buffer );
 int checkForSSID( const char *ssidName );
-void wifiConnect();
+bool wifiConnect( const char *ssid, const char *password );
+void wifiMultiConnect();
 void configureOTA();
 void publishTelemetry();
 void mqttCallback( char *topic, byte *payload, unsigned int length );

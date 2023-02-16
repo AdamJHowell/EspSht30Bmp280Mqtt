@@ -152,7 +152,7 @@ float averageArray( float valueArray[] )
  */
 void toggleLED()
 {
-   if( digitalRead( ONBOARD_LED ) != 1 )
+   if( digitalRead( ONBOARD_LED ) != LED_ON )
       digitalWrite( ONBOARD_LED, LED_ON );
    else
       digitalWrite( ONBOARD_LED, LED_OFF );
@@ -187,6 +187,8 @@ void printTelemetry()
 
    Serial.println( "Network stats:" );
    Serial.printf( "  MAC address: %s\n", macAddress );
+   Serial.print( "  IP address: " );
+   Serial.println( WiFi.localIP() );
    int wifiStatusCode = WiFi.status();
    char buffer[29];
    lookupWifiCode( wifiStatusCode, buffer );
@@ -194,8 +196,6 @@ void printTelemetry()
    {
       Serial.printf( "  IP address: %s\n", ipAddress );
       Serial.printf( "  RSSI: %ld\n", rssi );
-      Serial.print( "~~IP address: " );
-      Serial.println( WiFi.localIP() );
    }
    Serial.printf( "  wifiConnectCount: %u\n", wifiConnectCount );
    Serial.printf( "  wifiCoolDownInterval: %lu\n", wifiCoolDownInterval );
@@ -206,7 +206,7 @@ void printTelemetry()
    Serial.println( "MQTT stats:" );
    Serial.printf( "  mqttConnectCount: %u\n", mqttConnectCount );
    Serial.printf( "  mqttCoolDownInterval: %lu\n", mqttCoolDownInterval );
-   Serial.printf( "  Broker: %s:%d\n", mqttBroker, mqttPort );
+   Serial.printf( "  Broker: %s:%d\n", mqttClient.getServerDomain(), mqttClient.getServerPort() );
    lookupMQTTCode( mqttClient.state(), buffer );
    Serial.printf( "  MQTT state: %s\n", buffer );
    Serial.printf( "  Publish count: %lu\n", publishCount );
@@ -230,12 +230,14 @@ void printTelemetry()
    Serial.println( "\n" );
 } // End of the printTelemetry() function.
 
+/**
+ * @brief deviceRestart() will restart the device.
+ */
 void deviceRestart()
 {
+   Serial.println( "Restarting!" );
    ESP.restart();
-   setup();
-   loop();
-}
+} // End of the deviceRestart() function.
 
 /**
  * @brief setup() will configure the program.
@@ -264,10 +266,10 @@ void setup()
    readTelemetry();
    readTelemetry();
 
-   wifiConnect();
+   wifiMultiConnect();
    configureOTA();
 
-   Serial.println( "Function setup() has completed." );
+   Serial.println( "Function setup() has completed.\n" );
 } // End of the setup() function.
 
 /**
@@ -277,7 +279,7 @@ void loop()
 {
    // Reconnect Wi-Fi if needed, reconnect MQTT as needed.
    if( WiFi.status() != WL_CONNECTED )
-      wifiConnect();
+      wifiMultiConnect();
    else if( !mqttClient.connected() )
       mqttConnect();
 

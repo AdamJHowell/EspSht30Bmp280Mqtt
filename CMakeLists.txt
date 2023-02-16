@@ -8,6 +8,8 @@ add_executable( EspSht30Bmp280Mqtt
 		privateInfo.h
 		EspSht30Bmp280Mqtt.h
 		Network.ino
-		Network.h )
+		Network.h
+		PubSubClient.h
+		PubSubClient.cpp )
 
 set_target_properties( EspSht30Bmp280Mqtt PROPERTIES LINKER_LANGUAGE CXX )
