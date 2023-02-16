@@ -1,5 +1,6 @@
 # Generated from CLion C/C++ Code Style settings
-BasedOnStyle:                              LLVM
+BasedOnStyle:                              Microsoft
+Language:                                  Cpp
 AccessModifierOffset:                      -3
 AlignAfterOpenBracket:                     Align
 AlignConsecutiveAssignments:               None
@@ -41,11 +42,12 @@ BreakInheritanceList:                      BeforeColon
 ColumnLimit:                               0
 CompactNamespaces:                         false
 ContinuationIndentWidth:                   6
+EmptyLineBeforeAccessModifier:             Always
 IndentCaseLabels:                          true
 IndentPPDirectives:                        None
 IndentWidth:                               3
-KeepEmptyLinesAtTheStartOfBlocks:          true
-MaxEmptyLinesToKeep:                       2
+KeepEmptyLinesAtTheStartOfBlocks:          false
+MaxEmptyLinesToKeep:                       3
 NamespaceIndentation:                      All
 ObjCSpaceAfterProperty:                    false
 ObjCSpaceBeforeProtocolList:               true
@@ -69,4 +71,4 @@ SpacesInContainerLiterals:                 false
 SpacesInParentheses:                       true
 SpacesInSquareBrackets:                    false
 TabWidth:                                  3
-UseTab:                                    Always
+UseTab:                                    Never
