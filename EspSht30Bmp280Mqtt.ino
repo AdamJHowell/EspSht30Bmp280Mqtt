@@ -20,30 +20,32 @@
 #include <WiFiUdp.h>			  // Arduino Over-The-Air updates.
 
 
-char ipAddress[16];													 // A character array to hold the IP address.
-char macAddress[18];													 // A character array to hold the MAC address, and append a dash and 3 numbers.
-long rssi;																 // A global to hold the Received Signal Strength Indicator.
-unsigned int printInterval = 7000;								 // How long to wait between telemetry printouts.
-unsigned int publishInterval = 20000;							 // How long to wait between telemetry publishes.
-unsigned int wifiConnectCount = 0;								 // A counter for how many times the wifiConnect() function has been called.
-unsigned int mqttConnectCount = 0;								 // A counter for how many times the mqttConnect() function has been called.
-unsigned int invalidValueCount = 0;								 // A counter of how many times invalid values have been measured.
-unsigned int publishNow = 0;										 // A flag to indicate that a publish should happen immediately.
-unsigned long printCount = 0;										 // A counter of how many times the stats have been printed.
-unsigned long publishCount = 0;									 // A counter of how many times the stats have been published.
-unsigned long callbackCount = 0;									 // The number of times a callback was received.
-unsigned long lastPrintTime = 0;									 // The last time telemetry was printed.
-unsigned long lastPublishTime = 0;								 // The last time a MQTT publish was performed.
-unsigned long lastWifiConnectTime = 0;							 // The last time a Wi-Fi connection was attempted.
-unsigned long lastMqttConnectionTime = 0;						 // The last time a MQTT broker connection was attempted.
-unsigned long wifiCoolDownInterval = 10000;					 // How long to wait between Wi-Fi connection attempts.
-unsigned long mqttCoolDownInterval = 10000;					 // How long to wait between MQTT broker connection attempts.
-unsigned long wifiConnectionTimeout = 15000;					 // The amount of time to wait for a Wi-Fi connection.
-unsigned long ledBlinkInterval = 200;							 // The interval between telemetry processing times.
-unsigned long lastLedBlinkTime = 0;								 // The time of the last telemetry process.
-const unsigned int ONBOARD_LED = 2;								 // The GPIO which the onboard LED is connected to.
-const unsigned int JSON_DOC_SIZE = 512;						 // The ArduinoJson document size.
-const unsigned int MILLIS_IN_SEC = 1000;						 // The number of milliseconds in one second.
+char ipAddress[16];									// A character array to hold the IP address.
+char macAddress[18];									// A character array to hold the MAC address, and append a dash and 3 numbers.
+long rssi;												// A global to hold the Received Signal Strength Indicator.
+unsigned int printInterval = 7000;				// How long to wait between telemetry printouts.
+unsigned int publishInterval = 20000;			// How long to wait between telemetry publishes.
+unsigned int wifiConnectCount = 0;				// A counter for how many times the wifiConnect() function has been called.
+unsigned int mqttConnectCount = 0;				// A counter for how many times the mqttConnect() function has been called.
+unsigned int invalidValueCount = 0;				// A counter of how many times invalid values have been measured.
+unsigned int publishNow = 0;						// A flag to indicate that a publish should happen immediately.
+unsigned long printCount = 0;						// A counter of how many times the stats have been printed.
+unsigned long publishCount = 0;					// A counter of how many times the stats have been published.
+unsigned long callbackCount = 0;					// The number of times a callback was received.
+unsigned long lastPrintTime = 0;					// The last time telemetry was printed.
+unsigned long lastPublishTime = 0;				// The last time a MQTT publish was performed.
+unsigned long lastWifiConnectTime = 0;			// The last time a Wi-Fi connection was attempted.
+unsigned long lastMqttConnectionTime = 0;		// The last time a MQTT broker connection was attempted.
+unsigned long wifiCoolDownInterval = 10000;	// How long to wait between Wi-Fi connection attempts.
+unsigned long mqttCoolDownInterval = 10000;	// How long to wait between MQTT broker connection attempts.
+unsigned long wifiConnectionTimeout = 15000; // The amount of time to wait for a Wi-Fi connection.
+unsigned long ledBlinkInterval = 200;			// The interval between telemetry processing times.
+unsigned long lastLedBlinkTime = 0;				// The time of the last telemetry process.
+const unsigned int ONBOARD_LED = 2;				// The GPIO which the onboard LED is connected to.
+const unsigned int JSON_DOC_SIZE = 512;		// The ArduinoJson document size.
+const unsigned int MILLIS_IN_SEC = 1000;		// The number of milliseconds in one second.
+//const char *otaPass = "nunya";									 // OTA password.
+const char *hostName = "OutdoorESP8266";						 // The OTA hostname.
 const char *COMMAND_TOPIC = "OutdoorESP8266/commands";	 // The topic used to subscribe to update commands.  Commands: publishTelemetry, changeTelemetryInterval, changeSeaLevelPressure.
 const char *TOPIC_PREFIX = "OutdoorESP8266/";				 // The MQTT topic prefix, which will have suffixes appended to.
 const char *SHT_TEMP_C_TOPIC = "sht30/tempC";				 // The MQTT Celsius temperature topic suffix.
@@ -62,9 +64,9 @@ const char *MQTT_COOLDOWN_TOPIC = "mqttCoolDownInterval"; // The MQTT count topi
 const char *PUBLISH_COUNT_TOPIC = "publishCount";			 // The publishCount topic suffix.
 const char *MQTT_TOPIC = "espWeather";							 // The topic used to publish a single JSON message containing all data.
 float seaLevelPressure = 1026.1;									 // The local sea-level pressure. Provo Airport: https://forecast.weather.gov/data/obhistory/KPVU.html
-float sht30TempCArray[] = { 21.12, 21.12, 21.12 };			 // An array to hold the 3 most recent Celsius values.
-float sht30HumidityArray[] = { 21.12, 21.12, 21.12 };		 // An array to hold the 3 most recent values.
-float bmpTempCArray[] = { -21.12, 21.12, 42.42 };			 // An array to hold the 3 most recent Celsius values, initialized to reasonable levels.
+float sht30TempCArray[] = { -21.12, 21.12, 88.88 };		 // An array to hold the 3 most recent Celsius values.
+float sht30HumidityArray[] = { 1.1, 21.12, 55.55 };		 // An array to hold the 3 most recent values.
+float bmpTempCArray[] = { -21.12, 21.12, 88.88 };			 // An array to hold the 3 most recent Celsius values, initialized to reasonable levels.
 float bmpPressureHPaArray[] = { 8.7, 882.64, 1083.8 };	 // An array to hold the 3 most recent barometric pressure values, initialized to reasonable levels.
 float bmpAltitudeMArray[] = { -413.0, 1337.0, 3108.0 };	 // An array to hold the 3 most recent barometric pressure values, initialized to reasonable levels.
 //const char *wifiSsid = "nunya";											// Wi-Fi SSID.  Defined in privateInfo.h
@@ -354,8 +356,7 @@ void wifiConnect()
 			Serial.printf( "Attempting to connect to Wi-Fi SSID '%s'", wifiSsid );
 			WiFi.mode( WIFI_STA );
 			//			WiFi.config( INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE );
-			const char *hostName = macAddress;
-			WiFi.setHostname( hostName );
+			//			WiFi.setHostname( hostName );
 			WiFi.begin( wifiSsid, wifiPassword );
 
 			unsigned long wifiConnectionStartTime = millis();
@@ -389,15 +390,21 @@ void wifiConnect()
  */
 void configureOTA()
 {
-	Serial.println( "Configuring OTA." );
-
 #ifdef ESP8266
-	// The ESP8266 port defaults to 8266
-	// ArduinoOTA.setPort( 8266 );
-	// The ESP8266 hostname defaults to esp8266-[ChipID]
-	// ArduinoOTA.setHostname( hostName );
-	// Authentication is disabled by default.
-	// ArduinoOTA.setPassword( ( const char * )"admin" );
+	Serial.println( "Configuring OTA for the ESP8266" );
+	// Port defaults to 8266
+	// ArduinoOTA.setPort(8266);
+
+	// Hostname defaults to esp8266-[ChipID]
+	ArduinoOTA.setHostname( hostName );
+
+	// No authentication by default
+	ArduinoOTA.setPassword( otaPass );
+
+	// Password can be set with it's md5 value as well
+	// MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+	// ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
 	ArduinoOTA.onStart( []() {
 		String type;
 		if( ArduinoOTA.getCommand() == U_FLASH )
@@ -408,13 +415,33 @@ void configureOTA()
 		// NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
 		Serial.println( "Start updating " + type );
 	} );
+	ArduinoOTA.onEnd( []() {
+		Serial.println( "\nEnd" );
+	} );
+	ArduinoOTA.onProgress( []( unsigned int progress, unsigned int total ) {
+		Serial.printf( "Progress: %u%%\r", ( progress / ( total / 100 ) ) );
+	} );
+	ArduinoOTA.onError( []( ota_error_t error ) {
+		Serial.printf( "Error[%u]: ", error );
+		if( error == OTA_AUTH_ERROR ) Serial.println( "Auth Failed" );
+		else if( error == OTA_BEGIN_ERROR )
+			Serial.println( "Begin Failed" );
+		else if( error == OTA_CONNECT_ERROR )
+			Serial.println( "Connect Failed" );
+		else if( error == OTA_RECEIVE_ERROR )
+			Serial.println( "Receive Failed" );
+		else if( error == OTA_END_ERROR )
+			Serial.println( "End Failed" );
+	} );
+	ArduinoOTA.begin();
 #else
+	Serial.println( "Configuring OTA for the ESP32" );
 	// The ESP32 port defaults to 3232
 	// ArduinoOTA.setPort( 3232 );
 	// The ESP32 hostname defaults to esp32-[MAC]
 	//	ArduinoOTA.setHostname( hostName );  // I'm deliberately using the default.
 	// Authentication is disabled by default.
-	// ArduinoOTA.setPassword( "admin" );
+	ArduinoOTA.setPassword( otaPass );
 	// Password can be set with it's md5 value as well
 	// MD5( admin ) = 21232f297a57a5a743894a0e4a801fc3
 	// ArduinoOTA.setPasswordHash( "21232f297a57a5a743894a0e4a801fc3" );
@@ -434,7 +461,6 @@ void configureOTA()
 		Serial.print( "OTA is updating the " );
 		Serial.println( type );
 	} );
-#endif
 	ArduinoOTA.onEnd( []() { Serial.println( "\nTerminating OTA communication." ); } );
 	ArduinoOTA.onProgress( []( unsigned int progress, unsigned int total ) { Serial.printf( "OTA progress: %u%%\r", ( progress / ( total / 100 ) ) ); } );
 	ArduinoOTA.onError( []( ota_error_t error ) {
@@ -447,6 +473,7 @@ void configureOTA()
 
 	// Start listening for OTA commands.
 	ArduinoOTA.begin();
+#endif
 
 	Serial.println( "OTA is configured and ready." );
 } // End of the configureOTA() function.
@@ -662,6 +689,11 @@ void mqttCallback( char *topic, byte *payload, unsigned int length )
 			seaLevelPressure = tempValue;
 		Serial.printf( "seaLevelPressure has been changed to %f.\n", seaLevelPressure );
 	}
+	else if( strcmp( command, "deviceRestart" ) == 0 )
+	{
+		Serial.printf( "Restarting this device...\n" );
+		deviceRestart();
+	}
 	else
 		Serial.printf( "Unknown command '%s'\n", command );
 } // End of the mqttCallback() function.
@@ -706,6 +738,11 @@ void mqttConnect()
 	}
 } // End of the mqttConnect() function.
 
+void deviceRestart()
+{
+	ESP.restart();
+}
+
 /**
  * @brief setup() will configure the program.
  */
@@ -749,11 +786,9 @@ void loop()
 		wifiConnect();
 	else if( !mqttClient.connected() )
 		mqttConnect();
-	else
-	{
-		mqttClient.loop();
-		ArduinoOTA.handle();
-	}
+
+	mqttClient.loop();
+	ArduinoOTA.handle();
 
 	long currentTime = millis();
 	// Print the first time.  Avoid subtraction overflow.  Print every interval.
@@ -803,6 +838,6 @@ void loop()
 		Serial.println( "The device will reset in 5 seconds!" );
 		delay( 5 * MILLIS_IN_SEC );
 		Serial.println( "\n\n\n" );
-		ESP.restart();
+		deviceRestart();
 	}
 } // End of the loop() function.
