@@ -402,7 +402,6 @@ void publishTelemetry()
  * @brief mqttCallback() will process incoming messages on subscribed topics.
  * { "command": "publishTelemetry" }
  * { "command": "changeTelemetryInterval", "value": 10000 }
- * ToDo: Add more commands for the board to react to.
  */
 void mqttCallback( char *topic, byte *payload, unsigned int length )
 {
