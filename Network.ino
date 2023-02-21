@@ -140,7 +140,7 @@ bool wifiConnect( const char *ssid, const char *password )
 } // End of the wifiConnect() function.
 
 /**
- * @brief wifiMultiConnect() will iterate through the SSIDs in 'wifiSsidList[]', and then use checkForSSID() determine which are in range.
+ * @brief wifiMultiConnect() will iterate through the SSIDs in 'wifiSsidArray[]', and then use checkForSSID() determine which are in range.
  * When a SSID is in range, wifiConnect() will be called with that SSID and password.
  */
 void wifiMultiConnect()
@@ -150,10 +150,11 @@ void wifiMultiConnect()
    {
       Serial.println( "\nEntering wifiMultiConnect()" );
       digitalWrite( ONBOARD_LED, LED_OFF ); // Turn the LED off to show that Wi-Fi is not yet connected.
-      for( size_t networkArrayIndex = 0; networkArrayIndex < sizeof( wifiSsidList ); networkArrayIndex++ )
+      unsigned int arraySize = sizeof( wifiSsidArray );
+      for( unsigned int networkArrayIndex = 0; networkArrayIndex < arraySize; networkArrayIndex++ )
       {
          // Get the details for this connection attempt.
-         const char *wifiSsid = wifiSsidList[networkArrayIndex];
+         const char *wifiSsid = wifiSsidArray[networkArrayIndex];
          const char *wifiPassword = wifiPassArray[networkArrayIndex];
 
          // Announce the Wi-Fi parameters for this connection attempt.
@@ -163,21 +164,21 @@ void wifiMultiConnect()
 
          // Don't even try to connect if the SSID cannot be found.
          int ssidCount = checkForSSID( wifiSsid );
-         if( ssidCount > 0 )
+         if( ssidCount < 1 )
          {
-            // This is useful for detecting multiples APs.
-            if( ssidCount > 1 )
-               Serial.printf( "Found %d SSIDs matching '%s'.\n", ssidCount, wifiSsid );
-
-            // If the Wi-Fi connection is successful, set the mqttClient broker parameters.
-            if( wifiConnect( wifiSsid, wifiPassword ) )
-            {
-               mqttClient.setServer( mqttBrokerArray[networkArrayIndex], mqttPortArray[networkArrayIndex] );
-               return;
-            }
-         }
-         else
             Serial.printf( "Network '%s' was not found!\n\n", wifiSsid );
+            return;
+         }
+         // This is useful for detecting multiples APs.
+         if( ssidCount > 1 )
+            Serial.printf( "Found %d SSIDs matching '%s'.\n", ssidCount, wifiSsid );
+
+         // If the Wi-Fi connection is successful, set the mqttClient broker parameters.
+         if( wifiConnect( wifiSsid, wifiPassword ) )
+         {
+            mqttClient.setServer( mqttBrokerArray[networkArrayIndex], mqttPortArray[networkArrayIndex] );
+            break;
+         }
       }
       Serial.println( "Exiting wifiMultiConnect()\n" );
       lastWifiConnectTime = millis();
@@ -232,7 +233,6 @@ void configureOTA()
       else if( error == OTA_END_ERROR )
          Serial.println( "End Failed" );
    } );
-   ArduinoOTA.begin();
 #else
    Serial.println( "Configuring OTA for the ESP32" );
    // The ESP32 port defaults to 3232
@@ -244,7 +244,6 @@ void configureOTA()
    // Password can be set with it's md5 value as well
    // MD5( admin ) = 21232f297a57a5a743894a0e4a801fc3
    // ArduinoOTA.setPasswordHash( "21232f297a57a5a743894a0e4a801fc3" );
-
    //	Serial.printf( "Using hostname '%s'\n", hostName );
 
    String type = "filesystem"; // SPIFFS
@@ -269,10 +268,10 @@ void configureOTA()
 		else if( error == OTA_CONNECT_ERROR ) Serial.println( "OTA connection failed!" );
 		else if( error == OTA_RECEIVE_ERROR ) Serial.println( "OTA client was unable to properly receive data!" );
 		else if( error == OTA_END_ERROR ) Serial.println( "OTA transmission failed to terminate properly!" ); } );
+#endif
 
    // Start listening for OTA commands.
    ArduinoOTA.begin();
-#endif
 
    Serial.println( "OTA is configured and ready." );
 } // End of the configureOTA() function.
