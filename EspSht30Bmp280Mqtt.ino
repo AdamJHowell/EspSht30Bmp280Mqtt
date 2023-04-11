@@ -235,7 +235,9 @@ void printTelemetry()
  */
 void deviceRestart()
 {
-   Serial.println( "Restarting!" );
+   Serial.println( "Restarting in 5 seconds..." );
+   delay( 5000 );
+   Serial.println( "Restarting the device!" );
    ESP.restart();
 } // End of the deviceRestart() function.
 
