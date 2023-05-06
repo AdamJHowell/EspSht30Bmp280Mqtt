@@ -288,9 +288,8 @@ void loop()
    mqttClient.loop();
    ArduinoOTA.handle();
 
-   long currentTime = millis();
-   // Print the first time.  Avoid subtraction overflow.  Print every interval.
-   if( lastPrintTime == 0 || ( currentTime > printInterval && ( currentTime - printInterval ) > lastPrintTime ) )
+   // Print the first time.  Print every interval.
+   if( lastPrintTime == 0 || ( ( millis() - printInterval ) > lastPrintTime ) )
    {
       readTelemetry();
       printTelemetry();
@@ -298,22 +297,19 @@ void loop()
       lastPrintTime = millis();
    }
 
-   currentTime = millis();
-   // Publish only if connected.  Publish the first time.  Avoid subtraction overflow.  Publish every interval.
-   if( mqttClient.connected() && ( publishNow == 1 || lastPublishTime == 0 || ( currentTime > publishInterval && ( currentTime - publishInterval ) > lastPublishTime ) ) )
+   // Publish only if connected.  Publish the first time.  Publish every interval.
+   if( mqttClient.connected() && ( publishNow == 1 || lastPublishTime == 0 || ( millis() > publishInterval && ( millis() - publishInterval ) > lastPublishTime ) ) )
    {
       if( publishNow == 1 )
          readTelemetry();
       publishTelemetry();
-      lastPublishTime = millis();
       publishNow = 0;
       Serial.printf( "Next publish in %u seconds.\n\n", publishInterval / 1000 );
       lastPublishTime = millis();
    }
 
-   currentTime = millis();
-   // Process the first time.  Avoid subtraction overflow.  Process every interval.
-   if( lastLedBlinkTime == 0 || ( ( currentTime > ledBlinkInterval ) && ( currentTime - ledBlinkInterval ) > lastLedBlinkTime ) )
+   // Process the first time.  Process every interval.
+   if( lastLedBlinkTime == 0 || ( ( millis() - ledBlinkInterval ) > lastLedBlinkTime ) )
    {
       // If Wi-Fi is connected, but MQTT is not, blink the LED.
       if( WiFi.status() == WL_CONNECTED )
